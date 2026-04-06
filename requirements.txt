@@ -1,0 +1,18 @@
+# Sentry Vision — AI Security System
+# Python Dependencies
+
+# Core ML
+torch>=2.0.0
+torchvision>=0.15.0
+
+# Computer Vision
+opencv-python>=4.8.0
+Pillow>=9.0.0
+
+# Evaluation & Metrics
+scikit-learn>=1.3.0
+numpy>=1.24.0
+
+# Visualization
+matplotlib>=3.7.0
+seaborn>=0.12.0
