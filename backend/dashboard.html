@@ -1,0 +1,1032 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>SENTRY VISION — AI Security System</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;500;600;700&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet"/>
+<style>
+:root {
+  --bg:      #030508;
+  --bg2:     #070b0f;
+  --bg3:     #0a0f16;
+  --panel:   #0c1520;
+  --panel2:  #101c2c;
+  --border:  #172538;
+  --border2: #1e3048;
+  --cyan:    #00d4ff;
+  --cyan2:   #00a8cc;
+  --cyan3:   #007799;
+  --red:     #ff2244;
+  --red2:    #cc1133;
+  --green:   #00ff88;
+  --green2:  #00cc66;
+  --amber:   #ffaa00;
+  --amber2:  #cc8800;
+  --text:    #c0d8ec;
+  --text2:   #6a8fa8;
+  --text3:   #304d62;
+  --mono:    'Share Tech Mono', monospace;
+  --head:    'Orbitron', sans-serif;
+  --body:    'Rajdhani', sans-serif;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--body);
+  font-size: 15px;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* scanlines */
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.07) 2px, rgba(0,0,0,0.07) 4px);
+  pointer-events: none; z-index: 9999;
+}
+/* grid */
+body::after {
+  content: '';
+  position: fixed; inset: 0;
+  background-image:
+    linear-gradient(rgba(0,212,255,0.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,212,255,0.018) 1px, transparent 1px);
+  background-size: 44px 44px;
+  pointer-events: none; z-index: 0;
+}
+
+/* ── TOPBAR ── */
+.topbar {
+  position: sticky; top: 0; z-index: 200;
+  background: rgba(3,5,8,0.97);
+  border-bottom: 1px solid var(--border);
+  backdrop-filter: blur(16px);
+  display: flex; align-items: center;
+  padding: 0 28px; height: 62px;
+  box-shadow: 0 2px 40px rgba(0,0,0,0.7);
+}
+.logo {
+  display: flex; align-items: center; gap: 11px;
+  margin-right: 44px; flex-shrink: 0;
+}
+.logo-ring {
+  position: relative; width: 34px; height: 34px;
+}
+.logo-ring svg { width: 100%; height: 100%; }
+.logo-text {
+  font-family: var(--head);
+  font-size: 13px; font-weight: 900;
+  letter-spacing: 3px; color: #fff;
+  text-shadow: 0 0 24px rgba(0,212,255,0.5);
+}
+.logo-text em { color: var(--cyan); font-style: normal; }
+
+.nav { display: flex; align-items: stretch; height: 100%; gap: 0; }
+.nav-btn {
+  display: flex; align-items: center; gap: 9px;
+  padding: 0 22px;
+  font-family: var(--body); font-size: 12px;
+  font-weight: 700; letter-spacing: 2px;
+  text-transform: uppercase; color: var(--text2);
+  background: transparent; border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer; transition: all 0.2s; white-space: nowrap;
+}
+.nav-btn:hover { color: var(--text); background: rgba(0,212,255,0.03); }
+.nav-btn.active {
+  color: var(--cyan);
+  border-bottom-color: var(--cyan);
+  background: rgba(0,212,255,0.05);
+  text-shadow: 0 0 14px rgba(0,212,255,0.4);
+}
+.nav-btn svg { width: 15px; height: 15px; flex-shrink: 0; }
+
+.topbar-right {
+  margin-left: auto; display: flex; align-items: center; gap: 20px; flex-shrink: 0;
+}
+.live-pill {
+  display: flex; align-items: center; gap: 7px;
+  font-family: var(--mono); font-size: 10px; color: var(--green);
+}
+.live-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--green); box-shadow: 0 0 8px var(--green);
+  animation: blink-dot 2s infinite;
+}
+@keyframes blink-dot {
+  0%,100% { opacity:1; box-shadow: 0 0 8px var(--green); }
+  50%      { opacity:.4; box-shadow: 0 0 3px var(--green); }
+}
+#clock {
+  font-family: var(--mono); font-size: 11px; color: var(--text3);
+}
+
+/* ── MAIN ── */
+main { position: relative; z-index: 1; }
+.page { display: none; padding: 28px; animation: pg-in .3s ease; }
+.page.active { display: block; }
+@keyframes pg-in {
+  from { opacity:0; transform:translateY(6px); }
+  to   { opacity:1; transform:translateY(0); }
+}
+
+/* ── PAGE HEADER ── */
+.pg-head {
+  display: flex; align-items: flex-end; gap: 18px;
+  margin-bottom: 26px; padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+.pg-title { font-family: var(--head); font-size: 19px; font-weight: 700; letter-spacing: 2px; color: #fff; }
+.pg-sub   { font-family: var(--mono); font-size: 10px; color: var(--text3); margin-bottom: 3px; letter-spacing: 1px; }
+.pg-badge {
+  margin-left: auto;
+  font-family: var(--mono); font-size: 10px; letter-spacing: 1px;
+  padding: 4px 12px; border-radius: 2px;
+  border: 1px solid var(--border2); color: var(--text3);
+}
+
+/* ── SCAN LAYOUT ── */
+.scan-layout {
+  display: grid;
+  grid-template-columns: 380px 1fr;
+  gap: 22px;
+  align-items: start;
+}
+
+/* ── CARD ── */
+.card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px; padding: 22px;
+  position: relative; overflow: hidden;
+  transition: border-color .2s, box-shadow .2s;
+}
+.card::before {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+  opacity: 0; transition: opacity .3s;
+}
+.card:hover::before { opacity: .4; }
+.card:hover { border-color: var(--border2); box-shadow: 0 4px 28px rgba(0,0,0,.4); }
+
+.card-label {
+  font-family: var(--mono); font-size: 10px;
+  letter-spacing: 2px; text-transform: uppercase;
+  color: var(--text3); margin-bottom: 16px;
+  display: flex; align-items: center; gap: 8px;
+}
+.card-label::after { content:''; flex:1; height:1px; background:var(--border); }
+
+.corner-tl, .corner-br {
+  position: absolute; width: 13px; height: 13px; pointer-events: none;
+}
+.corner-tl { top:8px; left:8px; border-top:1px solid var(--cyan2); border-left:1px solid var(--cyan2); opacity:.35; }
+.corner-br { bottom:8px; right:8px; border-bottom:1px solid var(--cyan2); border-right:1px solid var(--cyan2); opacity:.35; }
+
+/* ── UPLOAD ── */
+.upload-zone {
+  border: 2px dashed var(--border2); border-radius: 6px;
+  padding: 32px 16px; text-align: center; cursor: pointer;
+  transition: all .25s; background: rgba(0,212,255,0.01);
+  position: relative;
+}
+.upload-zone:hover, .upload-zone.drag-over {
+  border-color: var(--cyan2); background: rgba(0,212,255,0.04);
+  box-shadow: inset 0 0 28px rgba(0,212,255,0.04);
+}
+.upload-zone input[type=file] {
+  position: absolute; inset: 0; opacity: 0; cursor: pointer; width:100%; height:100%;
+}
+.upload-icon { width:40px; height:40px; margin:0 auto 10px; opacity:.35; }
+.upload-zone p  { font-size:13px; color:var(--text2); margin-bottom:4px; }
+.upload-zone small { font-family:var(--mono); font-size:10px; color:var(--text3); }
+.preview-wrap { margin-top:14px; display:none; }
+.preview-img  { width:100%; max-height:220px; object-fit:cover; border-radius:4px; border:1px solid var(--border); }
+
+/* ── BUTTONS ── */
+.btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 11px 22px; font-family: var(--body);
+  font-size: 12px; font-weight: 700; letter-spacing: 2px;
+  text-transform: uppercase; border: none; border-radius: 4px;
+  cursor: pointer; transition: all .2s; position: relative; overflow: hidden;
+}
+.btn::after { content:''; position:absolute; inset:0; background:rgba(255,255,255,.07); opacity:0; transition:opacity .15s; }
+.btn:hover::after { opacity:1; }
+.btn:active { transform:scale(.98); }
+.btn:disabled { opacity:.35; cursor:not-allowed; transform:none !important; }
+.btn-primary {
+  background: linear-gradient(135deg, var(--cyan2), #006688);
+  color:#fff; box-shadow: 0 4px 22px rgba(0,168,204,.28);
+}
+.btn-primary:hover { box-shadow: 0 6px 30px rgba(0,168,204,.42); }
+.btn-scan {
+  width:100%; justify-content:center; margin-top:16px;
+  background: linear-gradient(135deg, #00a8cc 0%, #004466 100%);
+  color:#fff; font-size:13px; padding:14px;
+  box-shadow: 0 4px 28px rgba(0,168,204,.3);
+  letter-spacing: 3px;
+}
+.btn-scan:hover { box-shadow: 0 6px 36px rgba(0,168,204,.5); }
+.btn-ghost {
+  background: transparent; border: 1px solid var(--border2); color: var(--text2);
+}
+.btn-ghost:hover { border-color:var(--cyan2); color:var(--cyan); }
+.btn-sm { padding: 5px 14px; font-size: 10px; }
+
+/* ── SCAN PROGRESS ── */
+.scan-progress { display:none; margin-top:14px; }
+.scan-progress.active { display:block; }
+.sp-step {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 0; border-bottom: 1px solid var(--border);
+  font-family: var(--mono); font-size: 11px; color: var(--text2);
+}
+.sp-step:last-child { border-bottom: none; }
+.sp-icon { width:18px; height:18px; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:13px; }
+.sp-label { flex:1; }
+.sp-status { font-size:10px; letter-spacing:1px; }
+.sp-status.running { color:var(--cyan); animation: pulse-text 1s infinite; }
+.sp-status.done    { color:var(--green); }
+.sp-status.error   { color:var(--red); }
+.sp-status.waiting { color:var(--text3); }
+@keyframes pulse-text { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+.scan-bar { height:2px; background:var(--border); border-radius:1px; overflow:hidden; margin-top:14px; display:none; }
+.scan-bar.active { display:block; }
+.scan-bar-fill {
+  height:100%; width:0; background:var(--cyan);
+  box-shadow:0 0 8px var(--cyan); border-radius:1px;
+  transition: width .4s ease;
+}
+
+/* ── RESULTS PANEL ── */
+.results-panel { display:flex; flex-direction:column; gap:16px; }
+
+/* ── ALERT STRIP ── */
+.alert-strip {
+  display:none; border-radius:5px; padding:14px 18px;
+  border:1px solid; margin-bottom:4px;
+  animation: alert-pulse 1.8s infinite;
+}
+.alert-strip.show { display:flex; align-items:center; gap:14px; }
+.alert-strip.danger { background:rgba(255,34,68,.07); border-color:rgba(255,34,68,.4); }
+.alert-strip.warning { background:rgba(255,170,0,.06); border-color:rgba(255,170,0,.35); }
+@keyframes alert-pulse {
+  0%,100% { box-shadow: none; }
+  50%      { box-shadow: 0 0 20px rgba(255,34,68,.15); }
+}
+.alert-icon { font-size:22px; animation:shake .6s infinite; flex-shrink:0; }
+@keyframes shake {
+  0%,100%{transform:translateX(0)} 25%{transform:translateX(-2px)} 75%{transform:translateX(2px)}
+}
+.alert-body strong {
+  display:block; font-family:var(--head); font-size:12px; letter-spacing:1px;
+}
+.alert-body.danger strong { color:var(--red); }
+.alert-body.warning strong { color:var(--amber); }
+.alert-body span { font-family:var(--mono); font-size:10px; color:var(--text2); }
+
+/* ── RESULT CARD ── */
+.res-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px; overflow: hidden;
+}
+.res-card-head {
+  display: flex; align-items: center; gap: 12px;
+  padding: 13px 18px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg3);
+}
+.res-card-icon { font-size:18px; }
+.res-card-title {
+  font-family: var(--head); font-size: 11px;
+  font-weight: 700; letter-spacing: 2px; color: var(--text2);
+  flex: 1;
+}
+.res-badge {
+  font-family: var(--mono); font-size: 10px;
+  padding: 3px 10px; border-radius: 2px;
+  letter-spacing: 1px; border: 1px solid;
+}
+.res-badge.safe    { color:var(--green);  border-color:rgba(0,255,136,.3); background:rgba(0,255,136,.05); }
+.res-badge.danger  { color:var(--red);    border-color:rgba(255,34,68,.35); background:rgba(255,34,68,.06); }
+.res-badge.warning { color:var(--amber);  border-color:rgba(255,170,0,.35); background:rgba(255,170,0,.06); }
+.res-badge.idle    { color:var(--text3);  border-color:var(--border); }
+.res-badge.scanning { color:var(--cyan); border-color:rgba(0,212,255,.3); background:rgba(0,212,255,.05); animation:pulse-text 1s infinite; }
+
+.res-card-body { padding: 16px 18px; }
+
+/* plate display */
+.plate-display {
+  font-family: var(--head); font-size: 26px; font-weight: 900;
+  color: var(--cyan); letter-spacing: 6px;
+  text-shadow: 0 0 20px rgba(0,212,255,.5);
+  text-align: center; padding: 14px;
+  background: rgba(0,212,255,.04);
+  border: 1px solid rgba(0,212,255,.15);
+  border-radius: 4px; margin-bottom: 10px;
+}
+.plate-watchlist {
+  font-family: var(--mono); font-size: 11px;
+  text-align:center; padding: 6px;
+  border-radius: 3px;
+}
+.plate-watchlist.hit  { color:var(--red);   background:rgba(255,34,68,.06);  border:1px solid rgba(255,34,68,.2); }
+.plate-watchlist.miss { color:var(--green); background:rgba(0,255,136,.04); border:1px solid rgba(0,255,136,.2); }
+
+.res-msg { font-family:var(--mono); font-size:11px; color:var(--text2); line-height:1.7; }
+.res-msg.safe    { color:var(--green2); }
+.res-msg.danger  { color:#ff6677; }
+.res-msg.warning { color:var(--amber2); }
+
+/* idle placeholder */
+.idle-placeholder {
+  font-family:var(--mono); font-size:11px; color:var(--text3);
+  text-align:center; padding:18px 0; letter-spacing:1px;
+}
+
+/* ── STATS ROW ── */
+.stats-row {
+  display: grid; grid-template-columns: repeat(4,1fr); gap:14px; margin-bottom:24px;
+}
+.stat {
+  background:var(--panel); border:1px solid var(--border);
+  border-radius:5px; padding:16px 18px; position:relative; overflow:hidden;
+}
+.stat::after {
+  content:''; position:absolute; top:0; right:0; width:3px; height:100%;
+}
+.stat.c-cyan::after  { background:var(--cyan);  opacity:.5; }
+.stat.c-red::after   { background:var(--red);   opacity:.5; }
+.stat.c-green::after { background:var(--green); opacity:.5; }
+.stat.c-amber::after { background:var(--amber); opacity:.5; }
+.stat-val { font-family:var(--head); font-size:28px; font-weight:900; color:#fff; line-height:1; margin-bottom:5px; }
+.stat-lbl { font-family:var(--mono); font-size:10px; color:var(--text3); letter-spacing:1.5px; text-transform:uppercase; }
+
+/* ── TERMINAL ── */
+.terminal {
+  background:#020507; border:1px solid var(--border); border-radius:4px;
+  padding:12px 14px; font-family:var(--mono); font-size:11px;
+  color:#3a6644; line-height:1.8; max-height:130px; overflow-y:auto; margin-top:14px;
+}
+.tl::before  { content:'> '; color:var(--green2); }
+.te::before  { content:'! '; color:var(--red); }
+.te { color:#cc4455; }
+.tok::before { content:'✓ '; color:var(--green); }
+.tok { color:var(--green); }
+
+/* ── WATCHLIST ── */
+.wl-grid { display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-bottom:22px; }
+.field { margin-bottom:13px; }
+.field label {
+  display:block; font-family:var(--mono); font-size:10px;
+  letter-spacing:1.5px; color:var(--text3); margin-bottom:7px; text-transform:uppercase;
+}
+.field input {
+  width:100%; background:var(--bg2); border:1px solid var(--border);
+  border-radius:4px; padding:10px 13px;
+  font-family:var(--mono); font-size:13px; color:var(--text); outline:none;
+  transition: border-color .2s, box-shadow .2s;
+}
+.field input:focus { border-color:var(--cyan2); box-shadow:0 0 0 2px rgba(0,212,255,.07); }
+.field input::placeholder { color:var(--text3); }
+.search-row { display:flex; gap:10px; align-items:flex-end; margin-bottom:14px; }
+.search-row .field { flex:1; margin:0; }
+
+.msg-box { border-radius:4px; padding:10px 14px; margin-top:12px; display:none; font-family:var(--mono); font-size:11px; }
+.msg-box.show { display:block; }
+.msg-box.ok  { color:var(--green);  background:rgba(0,255,136,.04); border:1px solid rgba(0,255,136,.2); }
+.msg-box.err { color:var(--red);    background:rgba(255,34,68,.05); border:1px solid rgba(255,34,68,.2); }
+
+.table-wrap { border:1px solid var(--border); border-radius:5px; overflow:hidden; overflow-x:auto; }
+table { width:100%; border-collapse:collapse; font-size:13px; }
+thead tr { background:var(--bg3); border-bottom:1px solid var(--border); }
+thead th { padding:11px 15px; font-family:var(--mono); font-size:10px; letter-spacing:1.5px; text-transform:uppercase; color:var(--text3); text-align:left; white-space:nowrap; }
+tbody tr { border-bottom:1px solid var(--border); transition:background .15s; }
+tbody tr:last-child { border-bottom:none; }
+tbody tr:hover { background:rgba(0,212,255,.025); }
+tbody td { padding:11px 15px; font-family:var(--mono); font-size:12px; color:var(--text); white-space:nowrap; }
+.plate-tag { font-family:var(--head); font-size:12px; color:var(--cyan); letter-spacing:2px; }
+.empty-row td { text-align:center; padding:28px; color:var(--text3); font-size:11px; letter-spacing:1px; }
+
+/* ── SCROLLBAR ── */
+::-webkit-scrollbar { width:4px; height:4px; }
+::-webkit-scrollbar-track { background:var(--bg); }
+::-webkit-scrollbar-thumb { background:var(--border2); border-radius:2px; }
+
+/* ── RESPONSIVE ── */
+@media(max-width:960px) {
+  .scan-layout { grid-template-columns:1fr; }
+  .stats-row   { grid-template-columns:repeat(2,1fr); }
+  .wl-grid     { grid-template-columns:1fr; }
+}
+@media(max-width:580px) {
+  .nav-btn span { display:none; }
+  .topbar { padding:0 14px; }
+  .page   { padding:16px; }
+  .stats-row { grid-template-columns:1fr 1fr; }
+}
+</style>
+</head>
+<body>
+
+<!-- ══ TOPBAR ══ -->
+<header class="topbar">
+  <div class="logo">
+    <div class="logo-ring">
+      <svg viewBox="0 0 34 34" fill="none">
+        <circle cx="17" cy="17" r="15" stroke="#00d4ff" stroke-width="1.2" opacity=".5"/>
+        <circle cx="17" cy="17" r="9"  stroke="#00d4ff" stroke-width="1"/>
+        <circle cx="17" cy="17" r="3"  fill="#00d4ff"/>
+        <line x1="17" y1="2"  x2="17" y2="8"  stroke="#00d4ff" stroke-width="1.5"/>
+        <line x1="17" y1="26" x2="17" y2="32" stroke="#00d4ff" stroke-width="1.5"/>
+        <line x1="2"  y1="17" x2="8"  y2="17" stroke="#00d4ff" stroke-width="1.5"/>
+        <line x1="26" y1="17" x2="32" y2="17" stroke="#00d4ff" stroke-width="1.5"/>
+        <path d="M17 8 A9 9 0 0 1 26 17" stroke="#ff2244" stroke-width="1.5" stroke-linecap="round">
+          <animateTransform attributeName="transform" type="rotate" from="0 17 17" to="360 17 17" dur="3s" repeatCount="indefinite"/>
+        </path>
+      </svg>
+    </div>
+    <div class="logo-text">SENTRY<em>VISION</em></div>
+  </div>
+
+  <nav class="nav">
+    <button class="nav-btn active" onclick="showPage('scan')" data-page="scan">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/><circle cx="12" cy="10" r="3"/></svg>
+      <span>Security Scan</span>
+    </button>
+    <button class="nav-btn" onclick="showPage('watchlist')" data-page="watchlist">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+      <span>Watchlist</span>
+    </button>
+  </nav>
+
+  <div class="topbar-right">
+    <div class="live-pill"><div class="live-dot"></div><span>SYSTEM ONLINE</span></div>
+    <div id="clock"></div>
+  </div>
+</header>
+
+<main>
+
+<!-- ══════════════════════════════════════════
+     PAGE 1 — UNIFIED SECURITY SCAN
+═══════════════════════════════════════════ -->
+<div id="page-scan" class="page active">
+
+  <!-- stats -->
+  <div class="stats-row">
+    <div class="stat c-cyan">
+      <div class="stat-val" id="s-total">0</div>
+      <div class="stat-lbl">Total Scans</div>
+    </div>
+    <div class="stat c-red">
+      <div class="stat-val" id="s-threats">0</div>
+      <div class="stat-lbl">Threats Found</div>
+    </div>
+    <div class="stat c-green">
+      <div class="stat-val" id="s-clear">0</div>
+      <div class="stat-lbl">Scenes Clear</div>
+    </div>
+    <div class="stat c-amber">
+      <div class="stat-val" id="s-plates">0</div>
+      <div class="stat-lbl">Plates Detected</div>
+    </div>
+  </div>
+
+  <div class="scan-layout">
+
+    <!-- LEFT: upload + controls -->
+    <div>
+      <div class="card" style="margin-bottom:16px">
+        <div class="corner-tl"></div>
+        <div class="card-label">Image Input</div>
+        <div class="upload-zone" id="upload-zone">
+          <input type="file" id="scan-file" accept="image/*" onchange="onFileSelect()"/>
+          <div class="upload-icon">
+            <svg viewBox="0 0 48 48" fill="none" stroke="#6a8fa8" stroke-width="2">
+              <rect x="4" y="8" width="40" height="30" rx="3"/>
+              <circle cx="18" cy="22" r="5"/>
+              <path d="M4 32l11-11 8 8 6-6 15 13"/>
+              <path d="M30 8v-4M30 4l-4 4M30 4l4 4" stroke-width="1.5"/>
+            </svg>
+          </div>
+          <p>Drop scene image here or click to upload</p>
+          <small>JPG · PNG · WEBP — max 5MB</small>
+        </div>
+        <div class="preview-wrap" id="preview-wrap">
+          <img id="preview-img" class="preview-img" alt="preview"/>
+        </div>
+        <div class="corner-br"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-label">Scan Engine</div>
+        <div id="scan-progress" class="scan-progress">
+          <div class="sp-step">
+            <div class="sp-icon">🔥</div>
+            <div class="sp-label">Fire Detection</div>
+            <div class="sp-status waiting" id="sp-fire">WAITING</div>
+          </div>
+          <div class="sp-step">
+            <div class="sp-icon">🔫</div>
+            <div class="sp-label">Weapon Detection</div>
+            <div class="sp-status waiting" id="sp-weapon">WAITING</div>
+          </div>
+          <div class="sp-step">
+            <div class="sp-icon">🚗</div>
+            <div class="sp-label">License Plate Recognition</div>
+            <div class="sp-status waiting" id="sp-lpr">WAITING</div>
+          </div>
+        </div>
+        <div class="scan-bar" id="scan-bar"><div class="scan-bar-fill" id="scan-bar-fill"></div></div>
+
+        <button class="btn btn-scan" id="scan-btn" onclick="runFullScan()">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          RUN SECURITY SCAN
+        </button>
+
+        <div class="terminal" id="terminal">
+          <div class="tl">Sentry Vision v2.0 initialized.</div>
+          <div class="tl">Upload an image and press RUN SECURITY SCAN.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: results -->
+    <div class="results-panel">
+
+      <!-- unified alerts -->
+      <div id="alert-fire" class="alert-strip danger">
+        <div class="alert-icon">🔥</div>
+        <div class="alert-body danger">
+          <strong>⚠ FIRE DETECTED — EMERGENCY</strong>
+          <span>Call emergency services immediately. Evacuate the area.</span>
+        </div>
+      </div>
+      <div id="alert-weapon" class="alert-strip danger">
+        <div class="alert-icon">⚠️</div>
+        <div class="alert-body danger">
+          <strong>⚠ WEAPON DETECTED — THREAT ALERT</strong>
+          <span>Armed individual identified. Contact security personnel.</span>
+        </div>
+      </div>
+      <div id="alert-plate" class="alert-strip danger">
+        <div class="alert-icon">🚨</div>
+        <div class="alert-body danger">
+          <strong>⚠ STOLEN / WATCHLISTED VEHICLE DETECTED</strong>
+          <span>Plate matches watchlist. Notify law enforcement immediately.</span>
+        </div>
+      </div>
+
+      <!-- Fire result card -->
+      <div class="res-card">
+        <div class="res-card-head">
+          <div class="res-card-icon">🔥</div>
+          <div class="res-card-title">FIRE DETECTION</div>
+          <div class="res-badge idle" id="fire-badge">IDLE</div>
+        </div>
+        <div class="res-card-body" id="fire-body">
+          <div class="idle-placeholder">Awaiting scan...</div>
+        </div>
+      </div>
+
+      <!-- Weapon result card -->
+      <div class="res-card">
+        <div class="res-card-head">
+          <div class="res-card-icon">🔫</div>
+          <div class="res-card-title">WEAPON DETECTION</div>
+          <div class="res-badge idle" id="weapon-badge">IDLE</div>
+        </div>
+        <div class="res-card-body" id="weapon-body">
+          <div class="idle-placeholder">Awaiting scan...</div>
+        </div>
+      </div>
+
+      <!-- LPR result card -->
+      <div class="res-card">
+        <div class="res-card-head">
+          <div class="res-card-icon">🚗</div>
+          <div class="res-card-title">LICENSE PLATE RECOGNITION</div>
+          <div class="res-badge idle" id="lpr-badge">IDLE</div>
+        </div>
+        <div class="res-card-body" id="lpr-body">
+          <div class="idle-placeholder">Awaiting scan...</div>
+        </div>
+      </div>
+
+    </div><!-- /results-panel -->
+  </div><!-- /scan-layout -->
+</div>
+
+<!-- ══════════════════════════════════════════
+     PAGE 2 — WATCHLIST MANAGEMENT
+═══════════════════════════════════════════ -->
+<div id="page-watchlist" class="page">
+  <div class="pg-head">
+    <div>
+      <div class="pg-sub">MODULE · 02</div>
+      <div class="pg-title">WATCHLIST MANAGEMENT</div>
+    </div>
+    <div class="pg-badge">DATABASE · SQLITE</div>
+  </div>
+
+  <div class="wl-grid">
+    <!-- Add plate -->
+    <div class="card">
+      <div class="corner-tl"></div>
+      <div class="card-label">Add Plate to Watchlist</div>
+      <div class="field">
+        <label>License Plate Number</label>
+        <input type="text" id="add-input" placeholder="e.g.  ABC 1234" style="text-transform:uppercase"/>
+      </div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="addPlate()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        ADD TO WATCHLIST
+      </button>
+      <div class="msg-box" id="add-msg"></div>
+    </div>
+
+    <!-- Search -->
+    <div class="card">
+      <div class="corner-br"></div>
+      <div class="card-label">Search Watchlist</div>
+      <div class="search-row">
+        <div class="field">
+          <label>Plate Number</label>
+          <input type="text" id="search-input" placeholder="Partial or full plate..." style="text-transform:uppercase"/>
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="searchPlate()" style="flex-shrink:0;align-self:flex-end">SEARCH</button>
+      </div>
+      <div id="search-results"></div>
+    </div>
+  </div>
+
+  <!-- Table -->
+  <div class="card">
+    <div class="card-label" style="margin-bottom:14px">
+      All Watchlisted Plates
+      <button class="btn btn-ghost btn-sm" onclick="loadPlates()" style="margin-left:auto">↻ REFRESH</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>#</th><th>License Plate</th><th>Date Added</th><th>Action</th></tr>
+        </thead>
+        <tbody id="wl-tbody">
+          <tr class="empty-row"><td colspan="4">No plates on watchlist.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+</main>
+
+<audio id="audio-alert" style="display:none"></audio>
+
+<script>
+const BASE = 'http://localhost:8000';
+let stats = { total:0, threats:0, clear:0, plates:0 };
+
+// ── Clock ──
+function tick() {
+  document.getElementById('clock').textContent =
+    new Date().toLocaleTimeString('en-GB',{hour12:false}) + ' UTC+2';
+}
+setInterval(tick, 1000); tick();
+
+// ── Navigation ──
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  document.querySelector(`[data-page="${name}"]`).classList.add('active');
+  if (name === 'watchlist') loadPlates();
+}
+
+// ── File select ──
+function onFileSelect() {
+  const file = document.getElementById('scan-file').files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const img = document.getElementById('preview-img');
+    img.src = e.target.result;
+    document.getElementById('preview-wrap').style.display = 'block';
+  };
+  reader.readAsDataURL(file);
+}
+
+// ── Terminal log ──
+function log(msg, type='tl') {
+  const t = document.getElementById('terminal');
+  const d = document.createElement('div');
+  d.className = type; d.textContent = msg;
+  t.appendChild(d); t.scrollTop = t.scrollHeight;
+}
+
+// ── Stats ──
+function updateStats() {
+  document.getElementById('s-total').textContent   = stats.total;
+  document.getElementById('s-threats').textContent = stats.threats;
+  document.getElementById('s-clear').textContent   = stats.clear;
+  document.getElementById('s-plates').textContent  = stats.plates;
+}
+
+// ── Audio ──
+function playAudio(path) {
+  if (!path) return;
+  const a = document.getElementById('audio-alert');
+  a.src = BASE + '/' + path.replace(/^\//,'');
+  a.play().catch(()=>{});
+}
+
+// ── Step status helpers ──
+function setStep(id, status, label) {
+  const el = document.getElementById(id);
+  el.className = 'sp-status ' + status;
+  el.textContent = label;
+}
+function setBadge(id, cls, text) {
+  const el = document.getElementById(id);
+  el.className = 'res-badge ' + cls;
+  el.textContent = text;
+}
+function setBody(id, html) {
+  document.getElementById(id).innerHTML = html;
+}
+
+// ── Progress bar ──
+function setProgress(pct) {
+  document.getElementById('scan-bar-fill').style.width = pct + '%';
+}
+
+// ════════════════════════════════════════
+//  UNIFIED SCAN
+// ════════════════════════════════════════
+async function runFullScan() {
+  const file = document.getElementById('scan-file').files[0];
+  if (!file) { alert('Please upload an image first.'); return; }
+
+  const btn = document.getElementById('scan-btn');
+  btn.disabled = true;
+
+  // reset alerts
+  ['alert-fire','alert-weapon','alert-plate'].forEach(id =>
+    document.getElementById(id).classList.remove('show')
+  );
+
+  // reset result cards
+  ['fire','weapon','lpr'].forEach(k => {
+    setBadge(k+'-badge', 'scanning', 'SCANNING');
+    setBody(k+'-body', '<div class="idle-placeholder" style="color:var(--cyan);animation:pulse-text 1s infinite">Analyzing...</div>');
+  });
+
+  // show progress elements
+  document.getElementById('scan-progress').classList.add('active');
+  document.getElementById('scan-bar').classList.add('active');
+  setProgress(0);
+
+  // reset steps
+  setStep('sp-fire',   'running', 'SCANNING');
+  setStep('sp-weapon', 'waiting', 'WAITING');
+  setStep('sp-lpr',    'waiting', 'WAITING');
+
+  log('Starting unified security scan...');
+  log('Image: ' + file.name + ' (' + (file.size/1024).toFixed(1) + ' KB)');
+
+  let threatCount = 0;
+  let audioToPlay = null;
+
+  // ── 1. FIRE ──
+  try {
+    log('Running fire detection...');
+    const fd = new FormData(); fd.append('image', file);
+    const res  = await fetch(BASE + '/fire_predict', { method:'POST', body:fd });
+    const data = await res.json();
+
+    if (!res.ok) throw new Error(data.detail || 'Fire API error');
+
+    setProgress(33);
+    setStep('sp-fire', 'done', 'DONE');
+
+    if (data.fire_detected) {
+      threatCount++;
+      setBadge('fire-badge', 'danger', 'FIRE DETECTED');
+      setBody('fire-body', `<div class="res-msg danger">🔥 Fire signature identified in the scene. Emergency services should be notified immediately.</div>`);
+      document.getElementById('alert-fire').classList.add('show');
+      if (data.audio_file) audioToPlay = data.audio_file;
+      log('FIRE DETECTED in scene.', 'te');
+    } else {
+      setBadge('fire-badge', 'safe', 'CLEAR');
+      setBody('fire-body', `<div class="res-msg safe">✓ No fire signature detected. Thermal analysis clear.</div>`);
+      log('Fire check: clear.', 'tok');
+    }
+  } catch(err) {
+    setStep('sp-fire', 'error', 'ERROR');
+    setBadge('fire-badge', 'idle', 'ERROR');
+    setBody('fire-body', `<div class="res-msg danger">⚠ ${err.message}</div>`);
+    log('Fire detection error: ' + err.message, 'te');
+  }
+
+  // ── 2. WEAPON ──
+  setStep('sp-weapon', 'running', 'SCANNING');
+  try {
+    log('Running weapon detection...');
+    const fd = new FormData(); fd.append('image', file);
+    const res  = await fetch(BASE + '/predict_weapon', { method:'POST', body:fd });
+    const data = await res.json();
+
+    if (!res.ok) throw new Error(data.detail || 'Weapon API error');
+
+    setProgress(66);
+    setStep('sp-weapon', 'done', 'DONE');
+
+    if (data.weapon_detected) {
+      threatCount++;
+      setBadge('weapon-badge', 'danger', 'WEAPON DETECTED');
+      setBody('weapon-body', `<div class="res-msg danger">🔫 Armed threat identified in the scene. Security personnel must be alerted.</div>`);
+      document.getElementById('alert-weapon').classList.add('show');
+      if (data.audio_file && !audioToPlay) audioToPlay = data.audio_file;
+      log('WEAPON DETECTED in scene.', 'te');
+    } else {
+      setBadge('weapon-badge', 'safe', 'CLEAR');
+      setBody('weapon-body', `<div class="res-msg safe">✓ No weapons detected. Scene appears safe.</div>`);
+      log('Weapon check: clear.', 'tok');
+    }
+  } catch(err) {
+    setStep('sp-weapon', 'error', 'ERROR');
+    setBadge('weapon-badge', 'idle', 'ERROR');
+    setBody('weapon-body', `<div class="res-msg danger">⚠ ${err.message}</div>`);
+    log('Weapon detection error: ' + err.message, 'te');
+  }
+
+  // ── 3. LPR ──
+  setStep('sp-lpr', 'running', 'SCANNING');
+  try {
+    log('Running license plate recognition...');
+    const fd = new FormData(); fd.append('image', file);
+    const res  = await fetch(BASE + '/predict', { method:'POST', body:fd });
+    const data = await res.json();
+
+    if (!res.ok) throw new Error(data.detail || 'LPR API error');
+
+    setProgress(100);
+    setStep('sp-lpr', 'done', 'DONE');
+
+    const plates = data.results?.plates || data.results?.detections || [];
+    const plateText = plates.length > 0
+      ? (plates[0].text || plates[0].plate_number || 'UNREADABLE')
+      : null;
+
+    stats.plates += plates.length;
+
+    if (data.stolen_detected) {
+      threatCount++;
+      setBadge('lpr-badge', 'danger', 'WATCHLIST HIT');
+      setBody('lpr-body', `
+        <div class="plate-display">${plateText || '???'}</div>
+        <div class="plate-watchlist hit">⚠ PLATE FOUND IN WATCHLIST — STOLEN / FLAGGED VEHICLE</div>
+        <div class="res-msg danger" style="margin-top:10px">${data.message}</div>
+      `);
+      document.getElementById('alert-plate').classList.add('show');
+      if (data.audio_file && !audioToPlay) audioToPlay = data.audio_file;
+      log('WATCHLIST HIT: ' + plateText, 'te');
+    } else if (plateText) {
+      setBadge('lpr-badge', 'safe', 'PLATE CLEAR');
+      setBody('lpr-body', `
+        <div class="plate-display">${plateText}</div>
+        <div class="plate-watchlist miss">✓ Plate not found in watchlist — vehicle is clear</div>
+      `);
+      log('Plate detected: ' + plateText + ' — not on watchlist.', 'tok');
+    } else {
+      setBadge('lpr-badge', 'warning', 'NO PLATE');
+      setBody('lpr-body', `<div class="res-msg" style="color:var(--amber)">No license plate detected in this image.</div>`);
+      log('LPR: No plate found in frame.', 'tl');
+    }
+  } catch(err) {
+    setStep('sp-lpr', 'error', 'ERROR');
+    setBadge('lpr-badge', 'idle', 'ERROR');
+    setBody('lpr-body', `<div class="res-msg danger">⚠ ${err.message}</div>`);
+    log('LPR error: ' + err.message, 'te');
+  }
+
+  // ── finalize ──
+  stats.total++;
+  if (threatCount > 0) stats.threats++;
+  else stats.clear++;
+  updateStats();
+
+  if (audioToPlay) playAudio(audioToPlay);
+
+  const summary = threatCount > 0
+    ? `Scan complete — ${threatCount} threat(s) detected.`
+    : 'Scan complete — scene is clear.';
+  log(summary, threatCount > 0 ? 'te' : 'tok');
+
+  btn.disabled = false;
+}
+
+// ════════════════════════════════════════
+//  WATCHLIST
+// ════════════════════════════════════════
+async function loadPlates() {
+  try {
+    const res  = await fetch(BASE + '/plates');
+    const data = await res.json();
+    renderTable(data);
+  } catch { renderTable([]); }
+}
+
+function renderTable(plates) {
+  const tb = document.getElementById('wl-tbody');
+  if (!plates || plates.length === 0) {
+    tb.innerHTML = '<tr class="empty-row"><td colspan="4">No plates on watchlist.</td></tr>';
+    return;
+  }
+  tb.innerHTML = plates.map((p,i) => `
+    <tr>
+      <td style="color:var(--text3)">${String(i+1).padStart(2,'0')}</td>
+      <td><span class="plate-tag">${p.license_plate_number}</span></td>
+      <td>${p.timestamp ? new Date(p.timestamp).toLocaleString('en-GB') : '—'}</td>
+      <td><button class="btn btn-ghost btn-sm" onclick="deletePlate('${p.license_plate_number}')">REMOVE</button></td>
+    </tr>`).join('');
+}
+
+async function addPlate() {
+  const val = document.getElementById('add-input').value.trim().toUpperCase();
+  if (!val) { alert('Enter a plate number.'); return; }
+  const msg = document.getElementById('add-msg');
+  msg.className = 'msg-box'; msg.style.display = 'none';
+  try {
+    const res  = await fetch(BASE + '/plates', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ license_plate_number: val })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Failed');
+    msg.textContent = `✓ "${val}" added to watchlist.`;
+    msg.className = 'msg-box ok show';
+    document.getElementById('add-input').value = '';
+    loadPlates();
+  } catch(err) {
+    msg.textContent = '✗ ' + err.message;
+    msg.className = 'msg-box err show';
+  }
+}
+
+async function searchPlate() {
+  const val = document.getElementById('search-input').value.trim().toUpperCase();
+  if (!val) { alert('Enter a plate to search.'); return; }
+  const container = document.getElementById('search-results');
+  container.innerHTML = '<div style="font-family:var(--mono);font-size:11px;color:var(--text3);padding:8px 0">Searching...</div>';
+  try {
+    const res  = await fetch(BASE + '/search/' + encodeURIComponent(val));
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Search failed');
+    if (data.length === 0) {
+      container.innerHTML = '<div class="msg-box ok show">No matching plates found.</div>';
+    } else {
+      container.innerHTML = `<div class="msg-box err show">
+        ${data.length} match${data.length>1?'es':''} found:<br/>
+        ${data.map(p=>`<span class="plate-tag" style="margin-right:10px">${p.license_plate_number}</span>`).join('')}
+      </div>`;
+    }
+  } catch(err) {
+    container.innerHTML = `<div class="msg-box err show">Error: ${err.message}</div>`;
+  }
+}
+
+async function deletePlate(plate) {
+  if (!confirm(`Remove "${plate}" from watchlist?`)) return;
+  try {
+    await fetch(BASE + '/plates/' + encodeURIComponent(plate), { method:'DELETE' });
+    loadPlates();
+  } catch { alert('Failed to delete.'); }
+}
+
+// ── Drag & drop ──
+const zone = document.getElementById('upload-zone');
+zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
+zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+zone.addEventListener('drop', e => {
+  e.preventDefault(); zone.classList.remove('drag-over');
+  const input = document.getElementById('scan-file');
+  if (e.dataTransfer.files.length) {
+    input.files = e.dataTransfer.files;
+    onFileSelect();
+  }
+});
+
+loadPlates();
+</script>
+</body>
+</html>

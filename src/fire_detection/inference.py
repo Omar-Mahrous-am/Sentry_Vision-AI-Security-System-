@@ -16,33 +16,55 @@ def get_preprocess():
                              std=[0.229, 0.224, 0.225])
     ])
 
-# --- 2. The Inference Engine ---
-def run_inference(image_path, model_path, threshold=0.5):
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    
-    # Load Model — uses the SAME architecture as training
-    model = MobileNetFireDetection(pretrained=False)
-    checkpoint = torch.load(model_path, map_location=device, weights_only=False)
-    
-    # Handle if you saved the whole model or just the state_dict
-    if 'model_state_dict' in checkpoint:
-        model.load_state_dict(checkpoint['model_state_dict'])
-    else:
-        model.load_state_dict(checkpoint)
+# --- 2. The Inference Engine class ---
+class FireDetector:
+    def __init__(self, model_path, device=None, threshold=0.5):
+        self.device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.threshold = threshold
         
-    model.to(device).eval()
-    
-    # Load and Transform Image
-    img = Image.open(image_path).convert('RGB')
-    preprocess = get_preprocess()
-    img_tensor = preprocess(img).unsqueeze(0).to(device)
+        # Load Model
+        self.model = MobileNetFireDetection(pretrained=False)
+        checkpoint = torch.load(model_path, map_location=self.device, weights_only=False)
+        
+        if isinstance(checkpoint, dict) and 'model_state_dict' in checkpoint:
+            self.model.load_state_dict(checkpoint['model_state_dict'])
+        else:
+            self.model.load_state_dict(checkpoint)
+            
+        self.model.to(self.device).eval()
+        self.preprocess = get_preprocess()
 
-    # Predict
+    def detect_fire(self, image_data):
+        """Processes image data (bytes or path) and returns 1 if fire is detected, else 0."""
+        if isinstance(image_data, bytes):
+            from io import BytesIO
+            img = Image.open(BytesIO(image_data)).convert('RGB')
+        elif isinstance(image_data, str):
+            img = Image.open(image_data).convert('RGB')
+        else:
+            raise ValueError("image_data must be bytes or a file path string.")
+
+        img_tensor = self.preprocess(img).unsqueeze(0).to(self.device)
+
+        with torch.no_grad():
+            output = self.model(img_tensor)
+            probability = torch.sigmoid(output).item()
+        
+        return 1 if probability >= self.threshold else 0
+
+def run_inference(image_path, model_path, threshold=0.5):
+    detector = FireDetector(model_path, threshold=threshold)
+    result_int = detector.detect_fire(image_path)
+    
+    # Maintain backward compatibility with the tuple return if needed by CLI
+    # but for CLI we'll just re-calculate or adjust
+    img = Image.open(image_path).convert('RGB')
+    img_tensor = detector.preprocess(img).unsqueeze(0).to(detector.device)
     with torch.no_grad():
-        output = model(img_tensor)
+        output = detector.model(img_tensor)
         probability = torch.sigmoid(output).item()
     
-    label = "FIRE" if probability >= threshold else "NO FIRE"
+    label = "FIRE" if result_int == 1 else "NO FIRE"
     return label, probability
 
 # --- 3. CLI Entry Point ---
@@ -57,7 +79,14 @@ if __name__ == "__main__":
     if not os.path.exists(args.image):
         print(f"Error: Image {args.image} not found.")
     else:
-        result, confidence = run_inference(args.image, args.weights, args.threshold)
+        # Check if the weights file exists in models/fire_model/ as well
+        weights = args.weights
+        if not os.path.exists(weights):
+            alt_weights = os.path.join("models", "fire_model", "fire_model.pth")
+            if os.path.exists(alt_weights):
+                weights = alt_weights
+        
+        result, confidence = run_inference(args.image, weights, args.threshold)
         print(f"\nResult: **{result}**")
         print(f"Confidence: {confidence:.4f}")
         print("-" * 30)

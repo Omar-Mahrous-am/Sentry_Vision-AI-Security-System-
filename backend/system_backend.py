@@ -1,262 +1,260 @@
-#importing_Libraries
-from fastapi import FastAPI,HTTPException,status,Path,Depends
-from sqlalchemy import create_engine,Column,Integer,String,DateTime,Float
-from sqlalchemy.orm import sessionmaker,declarative_base     
-from typing import Optional,List
+# importing_Libraries
+from fastapi import FastAPI, HTTPException, Depends
+from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, Float, func
+from sqlalchemy.orm import sessionmaker, declarative_base, Session
+from typing import List
 from pydantic import BaseModel
-from sqlalchemy.orm import Session
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import UploadFile, File
 import os
 from src.lpr import get_lpr_pipeline
-from model import detect_fire
-from tts import generate_alert_audio    
+from src.fire_detection.inference import FireDetector
+from src.tts.tts_engine import generate_alert_audio   # now just speaks, returns nothing
+from src.weapon_detect.predict import WeaponDetection
 
-#FastAPI_Object
-app=FastAPI(title="Integration With SQLITE ")
+# ── App ────────────────────────────────────────────────────────────────────────
+app = FastAPI(title="Sentry Vision — AI Security System")
 
+# ── CORS ───────────────────────────────────────────────────────────────────────
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-#Setting_Engine_and_Session
-engine=create_engine("sqlite:///./users.db",connect_args={"check_same_thread":False})
-SessionLocal=sessionmaker(autocommit=False,autoflush=False,bind=engine)
-Base=declarative_base() 
+# ── Serve dashboard ────────────────────────────────────────────────────────────
+@app.get("/", response_class=HTMLResponse)
+async def serve_dashboard():
+    dashboard_path = os.path.join(os.path.dirname(__file__), "dashboard.html")
+    if not os.path.exists(dashboard_path):
+        raise HTTPException(status_code=404, detail="dashboard.html not found next to system_backend.py")
+    with open(dashboard_path, "r", encoding="utf-8") as f:
+        return f.read()
+
+# ── Database ───────────────────────────────────────────────────────────────────
+engine       = create_engine("sqlite:///./users.db", connect_args={"check_same_thread": False})
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Base         = declarative_base()
 
 class PredictionDB(Base):
     __tablename__ = "predictions"
+    id                   = Column(Integer, primary_key=True, index=True)
+    license_plate_number = Column(String, unique=True, index=True)
+    confidence           = Column(Float)
+    timestamp            = Column(DateTime)
 
-    id = Column(Integer, primary_key=True, index=True)
-    license_plate_number = Column(String)
-    confidence = Column(Float)
-    timestamp = Column(DateTime)
+class Plate(Base):
+    __tablename__ = "license_plate"
+    license_plate_number = Column(String, primary_key=True, index=True, unique=True)
+    timestamp            = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
+try:
+    Base.metadata.create_all(bind=engine)
+except Exception as e:
+    print(f"DB init warning: {e}")
 
+# ── Pydantic schemas ───────────────────────────────────────────────────────────
+class CreatePlate(BaseModel):
+    license_plate_number: str
+
+class PlateResponse(BaseModel):
+    license_plate_number: str
+    timestamp: datetime
+    class Config:
+        from_attributes = True
 
 class Predict(BaseModel):
-    License_Plate_number: str
-    confidence: float   
-    timestamp: datetime 
+    license_plate_number: str
+    confidence: float
+    timestamp: datetime
 
 class PredictResponse(BaseModel):
     id: int
     license_plate_number: str
     confidence: float
     timestamp: datetime
-
     class Config:
         from_attributes = True
 
+# ── Startup ────────────────────────────────────────────────────────────────────
+lpr_pipeline    = None
+fire_detector   = None
+weapon_detector = None
+MAX_UPLOAD_SIZE = 5 * 1024 * 1024
 
-
-#DataBase_Class
-class Plate(Base):
-    __tablename__="License_Plate"
-    License_Plate_number=Column(String,primary_key=True,index=True,unique=True)
-    timestamp=Column(DateTime,default=datetime.utcnow)
-
-
-
-
-
-#DataBase_create_user_Class
-class CreatePlate(BaseModel):
-    License_Plate_number: str
-
-# DataBase_return_user_Class
-class PlateResponse(BaseModel):
-    License_Plate_number: str      
-    timestamp: datetime
-    
-    class Config:
-        from_attributes=True    
-
-
-Base.metadata.create_all(bind=engine)
-
-
+@app.on_event("startup")
+def startup_event():
+    global lpr_pipeline, fire_detector, weapon_detector
+    lpr_pipeline = get_lpr_pipeline()
+    fire_model_path = os.path.join("models", "fire_model", "fire_model.pth")
+    if not os.path.exists(fire_model_path):
+        fire_model_path = "fire_model.pth"
+    fire_detector   = FireDetector(model_path=fire_model_path)
+    weapon_detector = WeaponDetection()
 
 def get_db():
-    db=SessionLocal()
+    db = SessionLocal()
     try:
         yield db
     finally:
-        db.close()  
+        db.close()
 
+# ── Watchlist endpoints ────────────────────────────────────────────────────────
 
+@app.get("/plates", response_model=List[PlateResponse])
+def get_all_plates(db: Session = Depends(get_db)):
+    return db.query(Plate).all()
 
-#Endpoints
-
-
-#Create_user_in_DB
-@app.get("/")
-def root():
-    return {"message": "FastAPI with SQL for License Plates"}
-
-@app.get("/plates/{License_Plate_number}",response_model=PlateResponse) 
-def get_plate(License_Plate_number: str,db:Session=Depends(get_db)):
-    plate=db.query(Plate).filter(Plate.License_Plate_number==License_Plate_number).first()
+@app.get("/plates/{license_plate_number}", response_model=PlateResponse)
+def get_plate(license_plate_number: str, db: Session = Depends(get_db)):
+    plate = db.query(Plate).filter(Plate.license_plate_number == license_plate_number).first()
     if plate is None:
-        raise HTTPException(status_code=404,detail="Plate Not Found!!")
+        raise HTTPException(status_code=404, detail="Plate Not Found!")
     return plate
 
-
-
-#Read_user_From_DB
-@app.post("/plates/", response_model=PlateResponse) 
+@app.post("/plates", response_model=PlateResponse)
 def create_plate(plate_data: CreatePlate, db: Session = Depends(get_db)):
-    db_plate = db.query(Plate).filter(Plate.License_Plate_number == plate_data.License_Plate_number).first()
-    if db_plate:
+    if db.query(Plate).filter(Plate.license_plate_number == plate_data.license_plate_number).first():
         raise HTTPException(status_code=400, detail="Plate already recorded")
-    
-    new_plate = Plate(License_Plate_number=plate_data.License_Plate_number)
-    db.add(new_plate)
-    db.commit()
-    db.refresh(new_plate)
+    new_plate = Plate(license_plate_number=plate_data.license_plate_number)
+    db.add(new_plate); db.commit(); db.refresh(new_plate)
     return new_plate
 
-
-
-#Update_newuser_in_DB
-@app.put("/plates/{License_Plate_number}",response_model=PlateResponse) 
-def update_plate(License_Plate_number: str, plate_data: CreatePlate, db: Session = Depends(get_db)):
-    db_plate = db.query(Plate).filter(Plate.License_Plate_number == License_Plate_number).first()
+@app.put("/plates/{license_plate_number}", response_model=PlateResponse)
+def update_plate(license_plate_number: str, plate_data: CreatePlate, db: Session = Depends(get_db)):
+    db_plate = db.query(Plate).filter(Plate.license_plate_number == license_plate_number).first()
     if db_plate is None:
-        raise HTTPException(status_code=404, detail="Plate Not Found!!")
-    
-    # In this case, we might only update the timestamp or the number itself (if corrected)
-    db_plate.License_Plate_number = plate_data.License_Plate_number
-    db_plate.timestamp = datetime.utcnow()
-    
-    db.commit()
-    db.refresh(db_plate)
+        raise HTTPException(status_code=404, detail="Plate Not Found!")
+    db_plate.license_plate_number = plate_data.license_plate_number
+    db_plate.timestamp = datetime.now(timezone.utc)
+    db.commit(); db.refresh(db_plate)
     return db_plate
 
-#Delete_user_from_DB
-@app.delete("/plates/{License_Plate_number}",response_model=PlateResponse) 
-def delete_plate(License_Plate_number: str, db: Session = Depends(get_db)):
-    db_plate = db.query(Plate).filter(Plate.License_Plate_number == License_Plate_number).first()
+@app.delete("/plates/{license_plate_number}", response_model=PlateResponse)
+def delete_plate(license_plate_number: str, db: Session = Depends(get_db)):
+    db_plate = db.query(Plate).filter(Plate.license_plate_number == license_plate_number).first()
     if db_plate is None:
-        raise HTTPException(status_code=404, detail="Plate Not Found!!")
-    db.delete(db_plate)
-    db.commit()
+        raise HTTPException(status_code=404, detail="Plate Not Found!")
+    db.delete(db_plate); db.commit()
     return db_plate
 
+@app.get("/search/{license_plate_number}", response_model=List[PlateResponse])
+def search_plates(license_plate_number: str, db: Session = Depends(get_db)):
+    return db.query(Plate).filter(Plate.license_plate_number.contains(license_plate_number)).all()
 
-#Searching_by_name_in_DB
-@app.get("/search/{License_Plate_number}",response_model=List[PlateResponse]) 
-def search_plates(License_Plate_number: str, db: Session = Depends(get_db)):
-    plates = db.query(Plate).filter(Plate.License_Plate_number.contains(License_Plate_number)).all()
-    return plates    
+# ── LPR endpoint ───────────────────────────────────────────────────────────────
 
-#Post_predict
 @app.post("/predict")
-async def License_plate_predict(image:UploadFile=File(...),db:Session=Depends(get_db)):
-    """
-    Endpoint to predict License Plates in the uploaded image.
-    """
+async def license_plate_predict(image: UploadFile = File(...), db: Session = Depends(get_db)):
     if not image.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="Invalid file type. Please upload an image.")
-        
+        raise HTTPException(status_code=400, detail="Invalid file type.")
     try:
         image_bytes = await image.read()
-        pipeline = get_lpr_pipeline()
-        results = pipeline.process_image(image_bytes)
-        
+        if len(image_bytes) > MAX_UPLOAD_SIZE:
+            raise HTTPException(status_code=413, detail="Image too large. Max 5MB.")
+
+        results = lpr_pipeline.process_image(image_bytes)
+
         stolen_detected = False
-        # results is likely a list or contains a list of plates
-        # We check if any of the detected plates are in our 'tracked' database
-        for result in results.get("detections", []):
-            plate_num = result.get("plate_number")
+        for plate in results.get("plates", []):
+            # Normalize: strip spaces + uppercase on both detected plate and DB value
+            plate_num = plate.get("text", "").replace(" ", "").upper()
             if plate_num:
-                db_plate = db.query(Plate).filter(Plate.License_Plate_number == plate_num).first()
+                db_plate = db.query(Plate).filter(
+                    func.upper(func.replace(Plate.license_plate_number, " ", "")) == plate_num
+                ).first()
                 if db_plate:
                     stolen_detected = True
                     break
 
         if stolen_detected:
-            message = "A Stolen or Watchlisted Car has been detected! Please call police immediately. " * 4
-            
-            # Generate TTS audio
-            audio_path = generate_alert_audio(message)
-            
-            # Since audio could fail, handle it gracefully
-            if not audio_path or not os.path.exists(audio_path):
-                audio_path = None
-                
-            return {
-                "results": results,
-                "stolen_detected": True,
-                "message": message,
-                "audio_file": audio_path
-            }
+            message = "A Stolen Car has been detected! Please call police immediately "*4
+            generate_alert_audio(message)   # speaks on server, returns nothing
+            return {"results": results, "stolen_detected": True,  "message": message}
         else:
-            return {
-                "results": results,
-                "stolen_detected": False,
-                "message": "No watchlisted plates detected",
-                "audio_file": None
-            }
-            
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Internal server error processing LPR: {str(e)}")
-    
+            return {"results": results, "stolen_detected": False, "message": "No watchlisted plates detected"}
 
-#post_fire_predict
-@app.post("/fire_predict")
-async  def fire_predict(image:UploadFile=File(...),db:Session=Depends(get_db)):
-    """
-    Endpoint to predict fire in the uploaded image.
-    """
-    if not image.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="Invalid file type. Please upload an image.")
-        
-    try:
-        image_bytes = await image.read()
-        result = detect_fire(image_bytes)
-        
-        if result == 1:
-            message = "Fire detected !! Please call emergency services immediately. " *4
-            
-            # Generate TTS audio
-            audio_path = generate_alert_audio(message)
-            
-            # Since audio could fail, handle it gracefully
-            if not audio_path or not os.path.exists(audio_path):
-                audio_path = None
-                
-            return {
-                "fire_detected": True,
-                "message": message,
-                "audio_file": audio_path
-            }
-        else:
-            return {
-                "fire_detected": False,
-                "message": "No fire detected",
-                "audio_file": None
-            }
-            
-    except ValueError as ve:
-        raise HTTPException(status_code=400, detail=str(ve))
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}") 
-
+        raise HTTPException(status_code=500, detail=f"LPR error: {str(e)}")
 
 
 @app.post("/save_predict", response_model=PredictResponse)
 def save_predict(predict_data: Predict, db: Session = Depends(get_db)):
-    """
-    Endpoint to save the prediction in the database.
-    """
-    db_predict = db.query(PredictionDB).filter(PredictionDB.license_plate_number == predict_data.License_Plate_number).first()
-    if db_predict:
+    if db.query(PredictionDB).filter(PredictionDB.license_plate_number == predict_data.license_plate_number).first():
         raise HTTPException(status_code=400, detail="Prediction already recorded")
-    
-    new_predict = PredictionDB(
-        license_plate_number=predict_data.License_Plate_number,
+    new = PredictionDB(
+        license_plate_number=predict_data.license_plate_number,
         confidence=predict_data.confidence,
-        timestamp=predict_data.timestamp
+        timestamp=predict_data.timestamp,
     )
-    db.add(new_predict)
-    db.commit()
-    db.refresh(new_predict)
-    return new_predict
+    db.add(new); db.commit(); db.refresh(new)
+    return new
+
+# ── Fire endpoint ──────────────────────────────────────────────────────────────
+
+@app.post("/fire_predict")
+async def fire_predict(image: UploadFile = File(...)):
+    if not image.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="Invalid file type.")
+    try:
+        image_bytes = await image.read()
+        if len(image_bytes) > MAX_UPLOAD_SIZE:
+            raise HTTPException(status_code=413, detail="Image too large. Max 5MB.")
+
+        result = fire_detector.detect_fire(image_bytes)
+
+        if result == 1:
+            message = "Fire detected! Please call emergency services immediately "*4
+            generate_alert_audio(message)   # speaks on server, returns nothing
+            return {"fire_detected": True,  "message": message}
+        else:
+            return {"fire_detected": False, "message": "No fire detected"}
+
+    except HTTPException:
+        raise
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Fire detection error: {str(e)}")
+
+# ── Weapon endpoint ────────────────────────────────────────────────────────────
+
+@app.post("/predict_weapon")
+async def weapon_predict(image: UploadFile = File(...)):
+    if not image.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="Invalid file type.")
+    try:
+        image_bytes = await image.read()
+        if len(image_bytes) > MAX_UPLOAD_SIZE:
+            raise HTTPException(status_code=413, detail="Image too large. Max 5MB.")
+
+        result = weapon_detector.process_weapon(image_bytes)
+
+        if result and len(result) > 0:
+            message = "Weapon detected! Please call Police immediately "*4
+            generate_alert_audio(message)   # speaks on server, returns nothing
+            return {"weapon_detected": True,  "message": message}
+        else:
+            return {"weapon_detected": False, "message": "No weapon detected"}
+
+    except HTTPException:
+        raise
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Weapon detection error: {str(e)}")
+
+# ── Image serve endpoint ───────────────────────────────────────────────────────
+
+@app.get("/Image/{image_name}")
+async def get_image(image_name: str):
+    image_path = f"images/{image_name}"
+    if not os.path.exists(image_path):
+        raise HTTPException(status_code=404, detail="Image not found")
+    return FileResponse(image_path)
