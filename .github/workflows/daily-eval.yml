@@ -1,0 +1,118 @@
+# =============================================================================
+# Daily Evaluation Pipeline — Sentry Vision AI Security System
+# =============================================================================
+# Evaluates the trained model daily to monitor performance drift.
+# Does NOT retrain — only computes metrics and stores results.
+# =============================================================================
+
+name: Daily Model Evaluation
+
+on:
+  # Run every day at 03:00 UTC
+  schedule:
+    - cron: "0 3 * * *"
+
+  # Allow manual trigger from the GitHub Actions UI
+  workflow_dispatch:
+    inputs:
+      weights_path:
+        description: "Path to model weights file"
+        required: false
+        default: "models/best_accuracy_model.pth"
+      data_dir:
+        description: "Path to evaluation dataset"
+        required: false
+        default: ""
+
+env:
+  PYTHON_VERSION: "3.11"
+  PYTHONDONTWRITEBYTECODE: "1"
+  PYTHONUNBUFFERED: "1"
+  DEFAULT_WEIGHTS: "models/best_accuracy_model.pth"
+
+jobs:
+  evaluate:
+    name: Evaluate Model
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── Checkout ──
+      - name: Checkout source code
+        uses: actions/checkout@v4
+        with:
+          lfs: true   # Pull large files (model weights) if using Git LFS
+
+      # ── Python Setup ──
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      # ── System Dependencies ──
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            libgl1 libglib2.0-0 libespeak1 ffmpeg
+
+      # ── Python Dependencies ──
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          pip install -r requirements.txt
+
+      # ── Verify Model Exists ──
+      - name: Verify model weights exist
+        run: |
+          WEIGHTS="${{ github.event.inputs.weights_path || env.DEFAULT_WEIGHTS }}"
+          if [ ! -f "$WEIGHTS" ]; then
+            echo "::error::Model weights not found at: $WEIGHTS"
+            echo "Ensure model weights are committed, in Git LFS, or downloaded as an artifact."
+            exit 1
+          fi
+          echo "Model weights found: $WEIGHTS ($(du -h $WEIGHTS | cut -f1))"
+
+      # ── Run Evaluation ──
+      - name: Run model evaluation
+        run: |
+          WEIGHTS="${{ github.event.inputs.weights_path || env.DEFAULT_WEIGHTS }}"
+          DATA_DIR="${{ github.event.inputs.data_dir }}"
+
+          CMD="python scripts/evaluate.py --weights $WEIGHTS"
+          if [ -n "$DATA_DIR" ]; then
+            CMD="$CMD --data-dir $DATA_DIR"
+          fi
+          CMD="$CMD --save-report eval-results/confusion_matrix.png"
+
+          echo "Running: $CMD"
+          mkdir -p eval-results
+          $CMD | tee eval-results/evaluation_log.txt
+
+      # ── Save Metrics as Artifact ──
+      - name: Upload evaluation results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-results-${{ github.run_id }}
+          path: |
+            eval-results/
+            models/confusion_matrix.png
+          retention-days: 90
+
+      # ── Summary in GitHub Actions UI ──
+      - name: Post evaluation summary
+        if: always()
+        run: |
+          echo "## 📊 Daily Evaluation Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Date:** $(date -u +%Y-%m-%d)" >> $GITHUB_STEP_SUMMARY
+          echo "**Run ID:** ${{ github.run_id }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ -f eval-results/evaluation_log.txt ]; then
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            tail -20 eval-results/evaluation_log.txt >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ No evaluation log found." >> $GITHUB_STEP_SUMMARY
+          fi

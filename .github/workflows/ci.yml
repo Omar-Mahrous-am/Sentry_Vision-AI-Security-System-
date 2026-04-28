@@ -1,0 +1,192 @@
+# =============================================================================
+# CI Pipeline — Sentry Vision AI Security System
+# =============================================================================
+# Quality gate: lint → test → validate dataset → compile check
+# Runs on every push and pull request to catch issues early.
+# =============================================================================
+
+name: CI Pipeline
+
+on:
+  push:
+    branches: [main, master, develop]
+  pull_request:
+    branches: [main, master, develop]
+
+# Cancel in-progress runs for the same branch/PR to save resources
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.11"
+  PYTHONDONTWRITEBYTECODE: "1"
+  PYTHONUNBUFFERED: "1"
+
+jobs:
+  # ─────────────────────────────────────────────
+  # 1. Lint — Code quality checks
+  # ─────────────────────────────────────────────
+  lint:
+    name: Lint & Style Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install linting tools
+        run: pip install flake8 flake8-bugbear isort
+
+      - name: Run flake8 (syntax + style)
+        run: |
+          flake8 src/ backend/ scripts/ tests/ \
+            --count \
+            --max-line-length=120 \
+            --statistics \
+            --show-source \
+            --extend-ignore=E203,W503
+
+      - name: Check import ordering (isort)
+        run: isort --check-only --diff src/ backend/ scripts/
+
+  # ─────────────────────────────────────────────
+  # 2. Test — Unit & integration tests
+  # ─────────────────────────────────────────────
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            libgl1 libglib2.0-0 libespeak1 ffmpeg
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          pip install -r requirements.txt
+          pip install pytest pytest-cov pytest-asyncio httpx
+
+      - name: Run pytest with coverage
+        run: |
+          python -m pytest tests/ \
+            --verbose \
+            --tb=short \
+            --junitxml=test-results/junit.xml \
+            --cov=src \
+            --cov=backend \
+            --cov-report=xml:coverage.xml \
+            --cov-report=term-missing
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: test-results/
+          retention-days: 30
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.xml
+          retention-days: 30
+
+  # ─────────────────────────────────────────────
+  # 3. Validate — Dataset integrity check
+  # ─────────────────────────────────────────────
+  validate-dataset:
+    name: Validate Dataset Integrity
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run dataset validation
+        run: python scripts/validate_dataset.py
+
+  # ─────────────────────────────────────────────
+  # 4. Compile Check — Ensure all modules import
+  # ─────────────────────────────────────────────
+  compile-check:
+    name: Compile & Import Check
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            libgl1 libglib2.0-0 libespeak1 ffmpeg
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Compile all Python files (syntax check)
+        run: python -m compileall src/ backend/ scripts/ -q
+
+      - name: Verify critical imports
+        run: |
+          python -c "
+          import sys
+          modules = [
+              'src.fire_detection.model',
+              'src.fire_detection.dataset',
+              'src.fire_detection.config',
+              'src.fire_detection.preprocessing',
+              'backend.system_backend',
+          ]
+          failed = []
+          for mod in modules:
+              try:
+                  __import__(mod)
+                  print(f'  ✓ {mod}')
+              except Exception as e:
+                  print(f'  ✗ {mod}: {e}')
+                  failed.append(mod)
+          if failed:
+              print(f'\n{len(failed)} module(s) failed to import.')
+              sys.exit(1)
+          print('\nAll critical modules imported successfully.')
+          "
