@@ -71,11 +71,13 @@ class Fire_Dataset(Dataset):
                 return None  # Unlabeled
             
             # train_videos - check filename
+            # NOTE: "nofire" must be checked BEFORE "fire" because
+            # "fire" is a substring of "nofire".
             elif "train_videos" in root_lower:
-                if "fire" in filename_lower or "smoke" in filename_lower:
-                    return 1  # Fire
-                elif "nofire" in filename_lower:
+                if "nofire" in filename_lower:
                     return 0  # No Fire
+                elif "fire" in filename_lower or "smoke" in filename_lower:
+                    return 1  # Fire
         
         return None  # Unknown/unlabeled
     
