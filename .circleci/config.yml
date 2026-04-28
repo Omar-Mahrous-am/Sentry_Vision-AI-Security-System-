@@ -1,44 +1,35 @@
 # ==============================================================================
-# CircleCI Configuration — Sentry Vision AI Security System
-# ==============================================================================
-# Pipeline: Checkout → Install Deps → Run Tests → Build Docker Image
-# Framework: FastAPI  |  Tests: pytest  |  Containerization: Docker
+# CircleCI Configuration — Sentry Vision AI Security System (FIXED)
 # ==============================================================================
 
 version: 2.1
 
 # ------------------------------------
-# Orbs — Reusable CircleCI packages
+# Orbs
 # ------------------------------------
 orbs:
-  python: circleci/python@2.1    # Simplifies Python environment setup
-  docker: circleci/docker@2.6    # Provides Docker build/push helpers
+  python: circleci/python@2.1
 
 # ------------------------------------
-# Executors — Define the runtime env
+# Executors
 # ------------------------------------
 executors:
   python-executor:
     docker:
-      # CircleCI convenience image with Python 3.11 pre-installed.
-      # cimg images include common build tools (git, curl, etc.)
       - image: cimg/python:3.11
     working_directory: ~/project
-    resource_class: large          # Increase resources for ML dependencies
+    resource_class: large
     environment:
-      # Prevent Python from writing .pyc files and buffer stdout/stderr
       PYTHONDONTWRITEBYTECODE: "1"
       PYTHONUNBUFFERED: "1"
-      # Keep pip quiet during installs
       PIP_DISABLE_PIP_VERSION_CHECK: "1"
       PIP_NO_CACHE_DIR: "1"
 
 # ------------------------------------
-# Commands — Reusable step sequences
+# Commands
 # ------------------------------------
 commands:
   install-system-deps:
-    description: "Install system-level libraries required by OpenCV, PyTorch, and TTS"
     steps:
       - run:
           name: Install system dependencies
@@ -49,13 +40,10 @@ commands:
               libglib2.0-0 \
               libespeak1 \
               ffmpeg
-            # Clean up apt cache to keep layer small
             sudo rm -rf /var/lib/apt/lists/*
 
   install-python-deps:
-    description: "Install Python dependencies from requirements.txt with pip caching"
     steps:
-      # Restore cached pip packages to speed up builds
       - restore_cache:
           keys:
             - pip-deps-v1-{{ checksum "requirements.txt" }}
@@ -65,34 +53,29 @@ commands:
           command: |
             python -m pip install --upgrade pip setuptools wheel
             pip install -r requirements.txt
-            # Install pytest (test runner) if not already in requirements
             pip install pytest pytest-cov pytest-asyncio httpx
-      # Save the pip cache for future runs
       - save_cache:
           key: pip-deps-v1-{{ checksum "requirements.txt" }}
           paths:
             - ~/.cache/pip
 
 # ------------------------------------
-# Jobs — Individual units of work
+# Jobs
 # ------------------------------------
+
 jobs:
-  # ── 1. Test ─────────────────────────
+  # =========================
+  # TEST JOB
+  # =========================
   test:
     executor: python-executor
     steps:
-      # Pull the latest source code
       - checkout
-
-      # Install OS-level libraries (OpenCV, espeak, etc.)
       - install-system-deps
-
-      # Install Python packages
       - install-python-deps
 
-      # Run the test suite with pytest
       - run:
-          name: Run tests with pytest
+          name: Run tests
           command: |
             python -m pytest tests/ \
               --verbose \
@@ -102,87 +85,54 @@ jobs:
               --cov=backend \
               --cov-report=html:coverage-html \
               --cov-report=term-missing
-          # Allow the step to complete even if some tests fail,
-          # so that test results are always uploaded.
           when: always
 
-      # Upload test results so they appear in the CircleCI UI
       - store_test_results:
           path: test-results
 
-      # Persist the HTML coverage report as a downloadable artifact
       - store_artifacts:
           path: coverage-html
           destination: coverage
 
-  # ── 2. Build Docker Image ──────────
+  # =========================
+  # DOCKER BUILD JOB (FIXED)
+  # =========================
   build-docker:
-    executor: python-executor
+    machine: true   # 🔥 FIX: avoids Docker API mismatch completely
+    working_directory: ~/project
     steps:
-      # Pull the latest source code
       - checkout
 
-      # setup_remote_docker allocates a remote Docker daemon so we can
-      # run `docker build` inside the CircleCI container environment.
-      - setup_remote_docker:
-          version: "20.10.24"
-          docker_layer_caching: true   # Cache Docker layers between builds
-
-      # Build the production Docker image
       - run:
           name: Build Docker image
           command: |
-            # Use the Git SHA as the image tag for traceability
             IMAGE_TAG="${CIRCLE_SHA1:0:7}"
             IMAGE_NAME="sentry-vision-ai-security-system"
 
-            echo "Building ${IMAGE_NAME}:${IMAGE_TAG} ..."
+            echo "Building ${IMAGE_NAME}:${IMAGE_TAG}"
+
             docker build \
-              --tag "${IMAGE_NAME}:${IMAGE_TAG}" \
-              --tag "${IMAGE_NAME}:latest" \
+              -t "${IMAGE_NAME}:${IMAGE_TAG}" \
+              -t "${IMAGE_NAME}:latest" \
               --label "org.opencontainers.image.revision=${CIRCLE_SHA1}" \
               --label "org.opencontainers.image.created=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
               .
 
-            echo "Image built successfully:"
             docker images "${IMAGE_NAME}"
 
-      # (Optional) Push to a container registry.
-      # Uncomment and configure when you're ready to deploy.
-      # - run:
-      #     name: Push Docker image to registry
-      #     command: |
-      #       IMAGE_TAG="${CIRCLE_SHA1:0:7}"
-      #       IMAGE_NAME="sentry-vision-ai-security-system"
-      #
-      #       # Log in to Docker Hub (or your registry of choice)
-      #       echo "${DOCKERHUB_PASSWORD}" | docker login -u "${DOCKERHUB_USERNAME}" --password-stdin
-      #
-      #       # Tag for registry
-      #       docker tag "${IMAGE_NAME}:${IMAGE_TAG}" "${DOCKERHUB_USERNAME}/${IMAGE_NAME}:${IMAGE_TAG}"
-      #       docker tag "${IMAGE_NAME}:latest"       "${DOCKERHUB_USERNAME}/${IMAGE_NAME}:latest"
-      #
-      #       # Push both tags
-      #       docker push "${DOCKERHUB_USERNAME}/${IMAGE_NAME}:${IMAGE_TAG}"
-      #       docker push "${DOCKERHUB_USERNAME}/${IMAGE_NAME}:latest"
-
 # ------------------------------------
-# Workflows — Orchestrate job execution
+# Workflows
 # ------------------------------------
 workflows:
   version: 2
 
-  # Main CI pipeline — runs on every push and pull request
   build-and-test:
     jobs:
-      # 1. Always run tests first
       - test
 
-      # 2. Build Docker image only after tests pass
       - build-docker:
           requires:
             - test
-          # Only build Docker on the main branch (saves CI minutes)
           filters:
             branches:
               only:
