@@ -1,4 +1,4 @@
-<![CDATA[<div align="center">
+<div align="center">
 
 # 🛡️ Sentry Vision — AI Security System
 
@@ -31,19 +31,24 @@ An end-to-end AI-powered security surveillance system that integrates **weapon d
 
 - [Overview](#-overview)
 - [Key Features](#-key-features)
-- [System Architecture](#-system-architecture)
+- [System Architecture](#%EF%B8%8F-system-architecture)
 - [AI Modules](#-ai-modules)
-- [Tech Stack](#-tech-stack)
+  - [Fire & Smoke Detection](#1-fire--smoke-detection-srcfire_detection)
+  - [Weapon Detection](#2-weapon-detection-srcweapon_detect)
+  - [License Plate Recognition](#3-license-plate-recognition-srclpr)
+  - [Text-to-Speech Alerting](#4-text-to-speech-alerting-srctts)
+- [Tech Stack](#%EF%B8%8F-tech-stack)
 - [Project Structure](#-project-structure)
 - [Getting Started](#-getting-started)
 - [API Reference](#-api-reference)
 - [CLI Scripts](#-cli-scripts)
-- [CI/CD & MLOps](#-cicd--mlops)
+- [CI/CD & MLOps](#%EF%B8%8F-cicd--mlops)
 - [Docker Deployment](#-docker-deployment)
 - [Configuration](#-configuration)
 - [Testing](#-testing)
 - [Contributing](#-contributing)
 - [License](#-license)
+- [Author](#-author)
 
 ---
 
@@ -126,7 +131,9 @@ When a threat is detected — a weapon, fire, or a watchlisted license plate —
 | **Inference Modes** | Single image, video file, live webcam |
 | **Model File** | `models/fire_model/fire_model.pth` (~9 MB) |
 
-**Module structure:**
+<details>
+<summary><strong>Module structure</strong></summary>
+
 - `model.py` — MobileNetV2 backbone with custom binary classifier head
 - `dataset.py` — Custom `Fire_Dataset` with video frame extraction
 - `dataloader.py` — Train/val/test split data loaders
@@ -137,6 +144,8 @@ When a threat is detected — a weapon, fire, or a watchlisted license plate —
 - `pipeline.py` — End-to-end inference pipeline
 - `config.py` — Centralized hyperparameters and paths
 
+</details>
+
 ### 2. Weapon Detection (`src/weapon_detect/`)
 
 | Detail | Value |
@@ -145,9 +154,13 @@ When a threat is detected — a weapon, fire, or a watchlisted license plate —
 | **Task** | Object detection — weapon localization |
 | **Model File** | `models/weapon_detection/best.pt` (~22 MB) |
 
-**Module structure:**
+<details>
+<summary><strong>Module structure</strong></summary>
+
 - `predict.py` — `WeaponDetection` class with single-load model pattern
 - `config.py` — Model path and device configuration
+
+</details>
 
 ### 3. License Plate Recognition (`src/lpr/`)
 
@@ -164,11 +177,15 @@ Input Image → Vehicle Detection (YOLO11n) → Plate Detection (plate.pt) → O
 | 3 | `best.pt` (~5.5 MB) | Arabic character & digit OCR |
 | 4 | Rule-based mapper | Egyptian governorate classification |
 
-**Module structure:**
+<details>
+<summary><strong>Module structure</strong></summary>
+
 - `pipeline.py` — `LPRPipeline` orchestrator with singleton pattern
 - `detector.py` — `LPRDetector` wrapping three YOLO models
 - `mapper.py` — Arabic character classification and governorate rules (27+ governorates)
 - `config.py` — Model paths and confidence thresholds
+
+</details>
 
 ### 4. Text-to-Speech Alerting (`src/tts/`)
 
@@ -370,13 +387,16 @@ The dashboard will be available at **http://localhost:8000**.
 | `POST` | `/predict` | Upload an image for LPR. Returns detected plates, text, governorate, and watchlist match status |
 | `POST` | `/save_predict` | Save a prediction result to the database |
 
-**Example — LPR Prediction:**
+<details>
+<summary><strong>Example — LPR Prediction</strong></summary>
+
 ```bash
 curl -X POST http://localhost:8000/predict \
   -F "image=@car_photo.jpg"
 ```
 
 **Response:**
+
 ```json
 {
   "results": {
@@ -398,17 +418,23 @@ curl -X POST http://localhost:8000/predict \
 }
 ```
 
+</details>
+
 ### Fire Detection
 
 | Method | Endpoint | Description |
 |---|---|---|
 | `POST` | `/fire_predict` | Upload an image for fire/smoke detection |
 
-**Example:**
+<details>
+<summary><strong>Example — Fire Detection</strong></summary>
+
 ```bash
 curl -X POST http://localhost:8000/fire_predict \
   -F "image=@scene.jpg"
 ```
+
+</details>
 
 ### Weapon Detection
 
@@ -416,11 +442,15 @@ curl -X POST http://localhost:8000/fire_predict \
 |---|---|---|
 | `POST` | `/predict_weapon` | Upload an image for weapon detection |
 
-**Example:**
+<details>
+<summary><strong>Example — Weapon Detection</strong></summary>
+
 ```bash
 curl -X POST http://localhost:8000/predict_weapon \
   -F "image=@surveillance.jpg"
 ```
+
+</details>
 
 ### Watchlist Management (CRUD)
 
@@ -433,12 +463,16 @@ curl -X POST http://localhost:8000/predict_weapon \
 | `DELETE` | `/plates/{plate_number}` | Remove a plate from the watchlist |
 | `GET` | `/search/{plate_number}` | Search plates by partial match |
 
-**Example — Add to Watchlist:**
+<details>
+<summary><strong>Example — Add to Watchlist</strong></summary>
+
 ```bash
 curl -X POST http://localhost:8000/plates \
   -H "Content-Type: application/json" \
   -d '{"license_plate_number": "س ج ب 1234"}'
 ```
+
+</details>
 
 ### Image Serving
 
@@ -492,7 +526,7 @@ python scripts/validate_dataset.py
 
 ## ⚙️ CI/CD & MLOps
 
-The project implements a full MLOps lifecycle with **four GitHub Actions workflows** and a **CircleCI pipeline**:
+The project implements a full MLOps lifecycle with **four GitHub Actions workflows** and a **CircleCI pipeline**.
 
 ### GitHub Actions
 
@@ -539,6 +573,7 @@ docker compose logs -f
 ```
 
 This starts:
+
 - **Backend** on port `8000` — FastAPI + AI inference
 - **Frontend** on port `8501` — Streamlit dashboard
 
@@ -675,4 +710,3 @@ This project is licensed under the **MIT License** — see the [LICENSE](LICENSE
 *Built with ❤️ using PyTorch, FastAPI, and YOLO*
 
 </div>
-]]>
