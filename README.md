@@ -2,8 +2,13 @@
 
 # 🛡️ Sentry Vision — AI Security System
 
+
+           
 **Real-time intelligent surveillance powered by deep learning**
 
+
+
+           
 [![CI Pipeline](https://github.com/Omar-Mahrous-am/Sentry_Vision-AI-Security-System-/actions/workflows/ci.yml/badge.svg)](https://github.com/Omar-Mahrous-am/Sentry_Vision-AI-Security-System-/actions/workflows/ci.yml)
 [![Deploy](https://github.com/Omar-Mahrous-am/Sentry_Vision-AI-Security-System-/actions/workflows/deploy.yml/badge.svg)](https://github.com/Omar-Mahrous-am/Sentry_Vision-AI-Security-System-/actions/workflows/deploy.yml)
 [![Python 3.11](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/downloads/release/python-3110/)
@@ -12,6 +17,8 @@
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.2-EE4C2C.svg)](https://pytorch.org)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg)](Dockerfile)
 
+
+           
 ---
 
 An end-to-end AI-powered security surveillance system that integrates **weapon detection**, **fire & smoke detection**, and **license plate recognition (LPR)** into a unified platform with a FastAPI backend, real-time dashboard, and production-grade MLOps pipelines.
